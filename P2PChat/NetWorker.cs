@@ -38,7 +38,7 @@ namespace P2PChat
             {
                 if (_endPointForSender != null)
                     return _endPointForSender;
-                _endPointForSender = new IPEndPoint(GetIpSetting(), GetPortSetting());
+                _endPointForSender = new IPEndPoint(GetGroupAddress(), GetIntParamFromConfig("PortForSending"));
                 return _endPointForSender;
             }
         }
@@ -64,7 +64,8 @@ namespace P2PChat
         /// <param name="onMessageReceive">Method for processing a received message</param>
         public async void InitializeUserListener(Action<Message> onMessageReceive)
         {
-            _recieverUdpClient = new UdpClient(GetPortSetting());
+            _recieverUdpClient = new UdpClient(GetIntParamFromConfig("PortForReceiving"));
+            _recieverUdpClient.JoinMulticastGroup(GetGroupAddress(), GetIntParamFromConfig("TTL"));
             while (true)
             {
                 var message = await _recieverUdpClient.ReceiveAsync();
@@ -93,7 +94,7 @@ namespace P2PChat
             {
                 bf.Serialize(memoryStream, message);
                 await _senderUdpClient.SendAsync(memoryStream.ToArray(), Convert.ToInt32(memoryStream.Length),
-                    new IPEndPoint(addresseeUser.IpAddress, GetPortSetting()));
+                    new IPEndPoint(addresseeUser.IpAddress, GetIntParamFromConfig("PortForSending")));
 
             }
         }
@@ -111,21 +112,22 @@ namespace P2PChat
 
 
 
-        private static IPAddress GetIpSetting()
+        private static IPAddress GetGroupAddress()
         {
-            return ConfigurationManager.AppSettings["AppMode"].Contains("local")
-                ? IPAddress.Loopback
-                : IPAddress.Broadcast;
+            IPAddress ip;
+            if (IPAddress.TryParse(ConfigurationManager.AppSettings["GroupAddress"], out ip))
+                return ip;
+            throw new ConfigurationErrorsException("GroupAddress is incorrect");
         }
 
-        private static int GetPortSetting()
+        private static int GetIntParamFromConfig(string paramName)
         {
             int port;
-            if (int.TryParse(ConfigurationManager.AppSettings["UdpPort"], out port))
+            if (int.TryParse(ConfigurationManager.AppSettings[paramName], out port))
             {
                 return port;
             }
-            throw new ConfigurationErrorsException("UdpPort parameter is incorrect");
+            throw new ConfigurationErrorsException(String.Format("{0} parameter is incorrect", paramName));
         }
 
         #endregion

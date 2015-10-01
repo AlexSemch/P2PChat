@@ -99,6 +99,7 @@ namespace P2PChat
                 await _netWorker.SendMessage(SelectedChat.AddresseeUser, message);
                 SelectedChat.AddMessage(message);
                 TbMessage.Clear();
+                TbMessage.Focus();
             }
             catch (Exception ex)
             {
