@@ -82,7 +82,7 @@ namespace P2PChat
 
         #endregion
 
-        #region methods
+        #region private methods
 
 
         private async void SendMessage()
@@ -109,7 +109,7 @@ namespace P2PChat
 
 
 
-        private void DisplayError(Exception ex)
+        private static void DisplayError(Exception ex)
         {
             MessageBox.Show(ex.Message, "Exception",
                 MessageBoxButton.OK,
@@ -148,15 +148,15 @@ namespace P2PChat
                 {
                     SessionParams.CurrentUser = new User(SessionParams.GetLocalIpAddress(), loginForm.Nikname);
                     this.Title = String.Format("P2PChat [{0}]", SessionParams.CurrentUser.Name);
-                    _netWorker = NetWorker.Instance();
-                    _netWorker.InitializeSender();
-                    _netWorker.InitializeUserListener(ms =>
+                    _netWorker = NetWorker.GetInstance();
+                    _netWorker.StartListening(ms =>
                     {
                         if (ms.SystemMessage)
                             RefreshUserList(ms);
                         else
                             AddMessageToChat(ms);
                     });
+                    _netWorker.StartSendingAvailabilityMessage();
                     this.Show();
                 }
                 else
@@ -190,6 +190,11 @@ namespace P2PChat
                 SendMessage();
         }
 
+        private void Window_Closing(object sender, CancelEventArgs e)
+        {
+            _netWorker.Stop();
+        }
+
         #endregion
 
         #region INotify
@@ -205,5 +210,6 @@ namespace P2PChat
 
         #endregion
 
+       
     }
 }

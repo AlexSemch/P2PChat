@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Media;
 
 namespace P2PChat.Model
 {
@@ -13,6 +14,16 @@ namespace P2PChat.Model
         public DateTime Time { get; set; }
         public User Author { get; set; }
         public bool SystemMessage { get; set; }
+
+        public Brush MessageColor
+        {
+            get
+            {
+                return Author.Equals(SessionParams.CurrentUser)
+                    ? new SolidColorBrush(Colors.LightSeaGreen)
+                    : new SolidColorBrush(Colors.DeepSkyBlue);
+            }
+        }
 
         public string Signature
         {

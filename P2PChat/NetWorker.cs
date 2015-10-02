@@ -6,17 +6,32 @@ using System.Runtime.Serialization.Formatters.Binary;
 using System.Threading.Tasks;
 using System.Timers;
 using System.Configuration;
+using System.Threading;
 using P2PChat.Model;
+using Timer = System.Timers.Timer;
 
 namespace P2PChat
 {
     /// <summary>
     /// Singleton for working with UDP protocol
     /// </summary>
-    public class NetWorker
+    public sealed class NetWorker
     {
-        public static NetWorker Instance()
+        public static NetWorker GetInstance()
         {
+            if (_instance != null)
+            {
+                return _instance;
+            }
+            _instance = new NetWorker
+            {
+                _udpClient = new UdpClient(GetIntParamFromConfig("LocalPort"))
+                {
+                    EnableBroadcast = true,
+                    MulticastLoopback = false
+                }
+            };
+            _instance._udpClient.JoinMulticastGroup(GetGroupAddress(), GetIntParamFromConfig("TTL"));
             return _instance;
         }
 
@@ -27,10 +42,11 @@ namespace P2PChat
 
         #region prop and fields
 
-        private static readonly NetWorker _instance = new NetWorker();
-        private UdpClient _senderUdpClient;
-        private UdpClient _recieverUdpClient;
+        private static NetWorker _instance;
+        private UdpClient _udpClient;
+        private UdpClient _udpSystemClient =  new UdpClient {EnableBroadcast = true, MulticastLoopback = false};
         private IPEndPoint _endPointForSender;
+        private Timer _onlineTimer;
 
         public IPEndPoint EndPointForSender
         {
@@ -38,7 +54,7 @@ namespace P2PChat
             {
                 if (_endPointForSender != null)
                     return _endPointForSender;
-                _endPointForSender = new IPEndPoint(GetGroupAddress(), GetIntParamFromConfig("PortForSending"));
+                _endPointForSender = new IPEndPoint(GetGroupAddress(), GetIntParamFromConfig("RemotePort"));
                 return _endPointForSender;
             }
         }
@@ -47,28 +63,26 @@ namespace P2PChat
 
         #region public methods
 
+
         /// <summary>
-        /// Initialize UdpClient for sending messages and system messages of the presence in network
+        /// Initialize UdpClient for sending system messages of the presence in network
         /// </summary>
-        public void InitializeSender()
+        public void StartSendingAvailabilityMessage()
         {
-            var onlineTimer = new Timer(2000);
-            onlineTimer.Elapsed += SendSystemMessage;
-            onlineTimer.Start();
-            _senderUdpClient = new UdpClient();
+            _onlineTimer = new Timer(GetIntParamFromConfig("OnlineMarkerPeriod"));
+            _onlineTimer.Elapsed += SendSystemMessage;
+            _onlineTimer.Start();
         }
 
         /// <summary>
         /// Initialization UdpClient for asynchronous listening network port, set in App.config
         /// </summary>
         /// <param name="onMessageReceive">Method for processing a received message</param>
-        public async void InitializeUserListener(Action<Message> onMessageReceive)
+        public async void StartListening(Action<Message> onMessageReceive)
         {
-            _recieverUdpClient = new UdpClient(GetIntParamFromConfig("PortForReceiving"));
-            _recieverUdpClient.JoinMulticastGroup(GetGroupAddress(), GetIntParamFromConfig("TTL"));
             while (true)
             {
-                var message = await _recieverUdpClient.ReceiveAsync();
+                var message = await _udpClient.ReceiveAsync();
                 Message ms;
                 using (var memoryStream = new MemoryStream(message.Buffer))
                 {
@@ -93,9 +107,8 @@ namespace P2PChat
             using (var memoryStream = new MemoryStream())
             {
                 bf.Serialize(memoryStream, message);
-                await _senderUdpClient.SendAsync(memoryStream.ToArray(), Convert.ToInt32(memoryStream.Length),
-                    new IPEndPoint(addresseeUser.IpAddress, GetIntParamFromConfig("PortForSending")));
-
+                await _udpClient.SendAsync(memoryStream.ToArray(), Convert.ToInt32(memoryStream.Length),
+                    new IPEndPoint(addresseeUser.IpAddress, GetIntParamFromConfig("RemotePort")));
             }
         }
 
@@ -103,13 +116,13 @@ namespace P2PChat
 
         #region private methods
 
+
         private async void SendSystemMessage(object sender, ElapsedEventArgs e)
         {
             await
-                _senderUdpClient.SendAsync(SessionParams.SystemMessageBytes, SessionParams.SystemMessageBytes.Length,
+                _udpSystemClient.SendAsync(SessionParams.SystemMessageBytes, SessionParams.SystemMessageBytes.Length,
                     EndPointForSender);
         }
-
 
 
         private static IPAddress GetGroupAddress()
@@ -128,6 +141,13 @@ namespace P2PChat
                 return port;
             }
             throw new ConfigurationErrorsException(String.Format("{0} parameter is incorrect", paramName));
+        }
+
+
+        public void Stop()
+        {
+           _udpClient.DropMulticastGroup(GetGroupAddress());
+            _onlineTimer.Stop();
         }
 
         #endregion
