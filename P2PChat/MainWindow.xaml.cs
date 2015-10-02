@@ -192,7 +192,8 @@ namespace P2PChat
 
         private void Window_Closing(object sender, CancelEventArgs e)
         {
-            _netWorker.Stop();
+            if (_netWorker != null)
+                _netWorker.Stop();
         }
 
         #endregion

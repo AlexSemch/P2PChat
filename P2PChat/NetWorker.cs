@@ -146,8 +146,9 @@ namespace P2PChat
 
         public void Stop()
         {
-           _udpClient.DropMulticastGroup(GetGroupAddress());
-            _onlineTimer.Stop();
+            _udpClient.DropMulticastGroup(GetGroupAddress());
+            if (_onlineTimer != null)
+                _onlineTimer.Stop();
         }
 
         #endregion
